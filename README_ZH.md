@@ -244,6 +244,31 @@ docker compose up -d --build
 
 ---
 
+## 本地历史县级治所
+
+可选的县级治所图层使用 [CHGIS V6 县级时间序列点数据](https://doi.org/10.7910/DVN/Q9VOF5)，
+包含县级行政单位的治所点，并非县界。1350—1911 年覆盖较完整，更早时期存在缺漏。
+显示时包含来源记录的起止年份；日期或坐标无效的记录会列出并跳过，不作猜测性修正。
+
+CHGIS 数据受 [V6 使用条款](https://doi.org/10.7910/DVN/FDLFJ3)约束，仅限学术、非商业用途，
+不得再分发下载或生成的数据。接受条款后，从官方数据页面下载 UTF-8 WGS84 ZIP，然后执行
+（需要 Node.js 和 `unzip`）：
+
+```bash
+node scripts/import_chgis_counties.js /path/to/v6_time_cnty_pts_utf_wgs84.zip
+python3 -m http.server 8000 --bind 127.0.0.1
+```
+
+在本地页面选择**图层 → 县级治所**并放大地图。图层按所选年份显示，并避让其他地图标注；
+继续放大可查看更详细的地点。选中的县即使没有足够空间显示名称，也会保留红色标记。
+即使图层未开启，也可以用中文名称或拼音在快速搜索中查找已导入的
+县级治所；结果显示年代，选择后会开启图层，并在必要时跳转到相应年份。
+生成的 `data/local/county-points.json` 已被 Git 忽略，也不会进入
+Docker 镜像；请勿公开托管或发布。导入保留来源坐标、名称和年份，仅过滤无效记录。
+引用：“CHGIS, Version: 6.” © 哈佛大学费正清中国研究中心与复旦大学历史地理研究中心，2016。
+
+---
+
 ## GeoJSON 导出（供 Leaflet / MapLibre / QGIS 使用）
 
 程序内置的几何数据是拓扑去重的 VLQ 紧凑编码。如需在其他项目中使用矢量图层，可在本地生成标准 RFC 7946 GeoJSON（EPSG:4326，经度/纬度），输出到 `geojson/`，不纳入版本库。导出范围为公元前 403 年至 1948 年，不含此后年份及现代省界图层。郡 / 州 / 府图层源自 CHGIS，其条款禁止再分发，因此默认不导出；如需在本地做学术、非商业用途，可加 `--with-prefectures` 参数导出，导出结果请勿公开发布：
@@ -273,7 +298,7 @@ hit.prefecture;                  // 默认为 null；加 --with-prefectures 导�
 
 ## 数据来源与授权
 
-代码和本项目自行整理的数据均采用 **GPL-3.0**。只有一层例外：源自 CHGIS 的郡 / 州 / 府级边界，仍受 CHGIS 原始条款约束。
+代码和本项目自行整理的数据均采用 **GPL-3.0**。源自 CHGIS 的郡 / 州 / 府级边界及本地导入的县级治所点仍受 CHGIS 原始条款约束。
 
 | 图层 | 来源 | 授权 |
 | :-- | :-- | :-- |
@@ -281,6 +306,7 @@ hit.prefecture;                  // 默认为 null；加 --with-prefectures 导�
 | 政权疆域轮廓（`polity`） | 以 [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps)（GPL-3.0）为起点，此后依据史籍手工重绘 | GPL-3.0 |
 | 一级政区（`region`：刺史部 / 道 / 路 / 省等） | 依据史籍手工绘制；早期版本的原始来源未记录 | GPL-3.0 |
 | **郡 / 州 / 府级边界**（`prefecture`，含战国与秦的郡） | 源自 **CHGIS V6** 与 **Robert M. Hartwell China Historical GIS**，简化至 0.01° 并经手工调整 | **不适用 GPL-3.0**。仅限学术、非商业用途，不得再分发，详见下文 |
+| 可选的本地县级治所点 | 用户自行导入 CHGIS V6 | 遵循 CHGIS 条款，仅限学术、非商业用途，不得再分发 |
 | 古地名、重大事件、行迹路线、人物年谱、地名沿革 | 本项目依据史籍整理 | GPL-3.0 |
 | 现代省界 | DataV GeoAtlas（阿里云） | 以 DataV GeoAtlas 条款为准 |
 | 河流、湖泊、周边国家 | 公有领域数据 | 公有领域 |

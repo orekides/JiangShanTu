@@ -350,6 +350,10 @@
         }
       }
 
+      if (this._countyPoints && this._getCountySearchEntries) {
+        entries.push(...this._getCountySearchEntries());
+      }
+
       // 1b. Strategic Historical Passes (名关雄隘 · 天下锁钥)
       for (const p of HistoricalAtlasController.STRATEGIC_PASSES) {
         const dIdx = this._findDynastyIndex(p.focusYear || -200);
@@ -824,6 +828,7 @@
       }
       if (
         item.kind === 'city' ||
+        item.kind === 'county' ||
         item.kind === 'pass' ||
         item.kind === 'gazetteer' ||
         item.kind === 'prefecture' ||
@@ -1007,6 +1012,8 @@
             if (resItem.politySpan >= 18) score += 1;
           } else if (resItem.kind === 'event') {
             if (resItem.dynasty === this.dynasties[this.dynastyIdx]) score += 4;
+          } else if (resItem.kind === 'county') {
+            if (this.year >= resItem.countyPoint[5] && this.year <= resItem.countyPoint[6]) score += 12;
           } else {
             if (resItem.dynasty === this.dynasties[this.dynastyIdx]) score += 10;
             if (resItem.isCapital) score += 2;
@@ -1277,6 +1284,11 @@
 
       if (item.kind === 'polity') {
         this.openPolityByKey(item.polityKey);
+        return;
+      }
+
+      if (item.kind === 'county') {
+        this._selectCountySearchResult(item);
         return;
       }
 

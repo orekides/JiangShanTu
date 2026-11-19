@@ -1070,6 +1070,7 @@
       this.grpCorridors = this._id('grp-corridors');
       this.grpJourney = this._id('grp-journey');
       this.grpSettlements = this._id('grp-settlements');
+      this.grpCounties = this._id('grp-counties');
       this.grpMilestones = this._id('grp-milestones');
       this.grpChallenge = this._id('grp-challenge');
       this.grpGenealogy = this._id('grp-genealogy');
@@ -1924,6 +1925,14 @@
       this._id('lbl-prefectures').textContent =
         this.locale === 'en' ? 'Admin Divisions' : '州道政区';
       this._id('lbl-settlements').textContent = this.uiStr('toggle_cities', '古地名');
+      const countyLabel = this._id('lbl-counties');
+      if (countyLabel) {
+        countyLabel.textContent = this.locale === 'en' ? 'County seats' : this._zh('县级治所');
+        countyLabel.parentElement.title = this.locale === 'en'
+          ? 'Zoom in to see county seats'
+          : this._zh('放大查看县级治所');
+        if (this._renderCountyPoints) this._renderCountyPoints();
+      }
       const lblCorridors = this._id('lbl-corridors');
       lblCorridors.textContent = this.uiStr('toggle_routes', '关河丝路');
       if (lblCorridors.parentElement) {
@@ -6910,6 +6919,7 @@
           this._renderPersonPinsOverlay();
         }
       });
+      if (this._renderCountyPoints) this._renderCountyPoints();
 
       // Auto callouts are kept or replaced by _syncAutoMilestoneBalloon below.
       const am = this.activeMilestone;
@@ -7385,6 +7395,7 @@
         this._rescaleSvgTypography({ zoomOnly });
       }
       this._updateScaleBar(rect);
+      if (this._renderCountyPoints) this._renderCountyPoints();
       if (this.activeMilestone) this._positionMilestoneBalloon(rect);
       this._scheduleTerrainTiles();
     }
@@ -7440,6 +7451,7 @@
         this._rescaleSvgTypography({ zoomOnly });
       }
       this._updateScaleBar(rect);
+      if (forceTypography && this._renderCountyPoints) this._renderCountyPoints();
       if (this.activeMilestone) this._positionMilestoneBalloon(rect);
       if (forceTypography) this._scheduleTerrainTiles();
     }
@@ -8865,6 +8877,7 @@
         this.activeMilestone._labelKey = null;
         this._positionMilestoneBalloon();
       }
+      if (this._renderCountyPoints && !this.svg.classList.contains('is-camera-moving')) this._renderCountyPoints();
     }
 
     _rescaleActivePersonPins(vw, s, zoomOnly = false) {
@@ -9291,6 +9304,7 @@
           polity: this.locale === 'en' ? 'Regime' : '政权',
           era: this.locale === 'en' ? 'Era' : '纪年',
           city: this.locale === 'en' ? 'City' : '古城',
+          county: this.locale === 'en' ? 'County seat' : '县级治所',
           pass: this.locale === 'en' ? 'Pass' : '雄关',
           gazetteer: this.locale === 'en' ? 'Landmark' : '名胜',
           prefecture: this.locale === 'en' ? 'Prefecture' : '州府',
@@ -9430,6 +9444,14 @@
           return;
         }
         const pinyinQuery = this._eventPinyinQuery(q);
+        if (!this._countyPoints && !this._countySearchAttempted) {
+          this._countySearchAttempted = true;
+          this._loadScriptOnce(this._lazyAssetUrl('js/atlas_counties.js', 'vCounties'))
+            .then(() => {
+              if (this._startCountySearch) this._startCountySearch(renderSearchDropdown);
+              else console.error('County search module failed to load');
+            });
+        }
         currentResults = this._queryQuickSearch(q);
         const pendingSearchData = [];
         if (/[a-z]/i.test(q) && !this._hasEnDict()) {
@@ -9709,6 +9731,23 @@
         if (cur) this._updateMilestoneStates(cur);
         this._rescaleSvgTypography();
       });
+      const countyToggle = this._id('chk-counties');
+      if (countyToggle) {
+        countyToggle.addEventListener('change', async (e) => {
+          if (!this._toggleCountyLayer) {
+            await this._loadScriptOnce(this._lazyAssetUrl('js/atlas_counties.js', 'vCounties'));
+          }
+          if (this._toggleCountyLayer) {
+            this._toggleCountyLayer(e.target);
+          } else {
+            e.target.checked = false;
+            console.error('County module failed to load');
+            window.alert(this.locale === 'en'
+              ? 'County layer failed to load.'
+              : this._zh('县级图层加载失败。'));
+          }
+        });
+      }
       this._id('chk-corridors').addEventListener('change', (e) => {
         this.grpCorridors.classList.toggle('is-hidden', !e.target.checked);
         this.svg.classList.toggle('is-corridors-hidden', !e.target.checked);

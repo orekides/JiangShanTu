@@ -244,6 +244,36 @@ Note: the image is built locally; it is not published to any registry.
 
 ---
 
+## Local historical county seats
+
+The optional county layer uses [CHGIS V6 Time Series County Points](https://doi.org/10.7910/DVN/Q9VOF5).
+It includes county-level jurisdictions, not county boundaries. Coverage is mostly complete for
+1350–1911 and has gaps earlier. Source start and end years are displayed inclusively; records with
+invalid dates or coordinates are reported and omitted rather than corrected.
+
+CHGIS permits academic, non-commercial use under its [V6 terms](https://doi.org/10.7910/DVN/FDLFJ3);
+do not redistribute the downloaded or generated data. After accepting those terms, download the
+UTF-8 WGS84 ZIP from the official dataset page, then run (requires Node.js and `unzip`):
+
+```bash
+node scripts/import_chgis_counties.js /path/to/v6_time_cnty_pts_utf_wgs84.zip
+python3 -m http.server 8000 --bind 127.0.0.1
+```
+
+Open the local site, enable **Layers → County seats**, and zoom in. The layer shows only records
+valid for the selected year and avoids overlapping other map labels; zoom in further for more detail.
+A selected county retains a red marker even if there is no room for its name. Quick search
+also finds imported county seats by Chinese name or pinyin, even when the layer is off. Results
+show their date ranges; selecting one enables the layer and moves to an applicable year if needed.
+The generated
+`data/local/county-points.json` is ignored by Git and excluded from the Docker image. Do not serve
+it publicly or include it in published builds. The source coordinates, names and date ranges are
+retained; the importer filters invalid records. Citation: “CHGIS, Version: 6.” © Fairbank Center
+for Chinese Studies, Harvard University and Center for Historical Geographical Studies, Fudan
+University, 2016.
+
+---
+
 ## GeoJSON Export (for Leaflet / MapLibre / QGIS)
 
 The app ships its geometry as compact topology-deduplicated VLQ bundles. To use the vector layers in other projects, generate standard RFC 7946 GeoJSON (EPSG:4326, lon/lat) locally; the output goes to `geojson/` and is not committed. The export covers 403 BCE to 1948; later years and the modern province layer are not included. The prefecture layer (郡 / 州 / 府) is left out by default because it derives from CHGIS, whose terms forbid redistribution; add `--with-prefectures` to include it for local academic, non-commercial use, and do not publish the result.
@@ -273,7 +303,7 @@ After exporting, serve the repository (`python3 -m http.server 8000`) and open `
 
 ## Data Sources & License
 
-Code and the data created by this project are released under **GPL-3.0**. One layer is not: the prefecture-level boundaries derived from CHGIS, which stay under CHGIS's own terms.
+Code and the data created by this project are released under **GPL-3.0**. CHGIS-derived prefecture boundaries and locally imported county points remain under CHGIS's own terms.
 
 | Layer | Source | License |
 | :-- | :-- | :-- |
@@ -281,6 +311,7 @@ Code and the data created by this project are released under **GPL-3.0**. One la
 | Polity outlines (`polity`) | Started from [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) (GPL-3.0), then redrawn by hand against historical texts | GPL-3.0 |
 | First-level divisions (`region`: 刺史部 / 道 / 路 / 省 …) | Drawn by hand from historical texts; the source of early versions was not recorded | GPL-3.0 |
 | **Prefecture-level boundaries** (`prefecture`: 郡 / 州 / 府, incl. Warring States and Qin commanderies) | Derived from **CHGIS V6** and the **Robert M. Hartwell China Historical GIS**, simplified to 0.01° and edited by hand | **Not GPL-3.0.** Academic, non-commercial use only; do not redistribute. See below |
+| Optional local county-level seats | CHGIS V6, imported locally by the user | CHGIS terms; academic, non-commercial use only; do not redistribute |
 | Settlements, milestones, journeys, person chronicles, place lore | Compiled by this project from historical texts | GPL-3.0 |
 | Modern provinces | DataV GeoAtlas (Alibaba Cloud) | Subject to DataV GeoAtlas terms |
 | Rivers, lakes, neighbouring countries | Public-domain data | Public domain |

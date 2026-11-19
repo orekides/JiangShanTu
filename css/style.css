@@ -1852,6 +1852,37 @@ html.deeplink-boot #inp-year {
   pointer-events: none;
 }
 
+/* County-level seats are scaled in map coordinates by the renderer. */
+#viewport-frame.has-active-challenge #grp-counties,
+#atlas-svg.is-camera-moving #grp-counties {
+  display: none;
+}
+
+.county-point {
+  pointer-events: none;
+}
+
+.county-point circle {
+  fill: #fffdf8;
+  stroke: #65564a;
+  stroke-width: 1;
+}
+
+.county-point.is-selected circle {
+  stroke: var(--vermilion);
+  stroke-width: 2;
+}
+
+.county-point text {
+  font-family: var(--serif-stack);
+  font-size: 12px;
+  fill: #483d33;
+  paint-order: stroke fill;
+  stroke: rgba(249, 244, 234, 0.95);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+}
+
 /* Settlements / Ancient Cities (Refined compact cartographic typography) */
 .settlement-node {
   cursor: pointer;

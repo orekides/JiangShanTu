@@ -28,6 +28,153 @@ async function runCartographyUiSuite(ctx) {
     pointInShape,
   } = ctx;
 
+  {
+    const { readCounties } = require('../import_chgis_counties');
+    const fields = [
+      ['NAME_CH', 18], ['NAME_FT', 18], ['NAME_PY', 18],
+      ['BEG_YR', 6], ['END_YR', 6], ['SYS_ID', 6],
+    ];
+    const headerSize = 33 + fields.length * 32;
+    const recordSize = 1 + fields.reduce((sum, field) => sum + field[1], 0);
+    const dbf = Buffer.alloc(headerSize + recordSize * 2, 0x20);
+    dbf[0] = 3;
+    dbf.writeUInt32LE(2, 4);
+    dbf.writeUInt16LE(headerSize, 8);
+    dbf.writeUInt16LE(recordSize, 10);
+    fields.forEach(([name, length], i) => {
+      dbf.fill(0, 32 + i * 32, 32 + (i + 1) * 32);
+      dbf.write(name, 32 + i * 32, 'ascii');
+      dbf[32 + i * 32 + 16] = length;
+    });
+    dbf[headerSize - 1] = 13;
+    const rows = [
+      ['测试县', '測試縣', 'Test Xian', '1368', '1644', '1'],
+      ['坏县', '壞縣', 'Bad Xian', '1500', '1400', '2'],
+    ];
+    rows.forEach((row, i) => {
+      let offset = headerSize + i * recordSize + 1;
+      row.forEach((value, j) => {
+        dbf.write(value, offset, fields[j][1], 'utf8');
+        offset += fields[j][1];
+      });
+    });
+    const shp = Buffer.alloc(100 + 2 * 28);
+    shp.writeInt32BE(9994, 0);
+    shp.writeInt32BE(shp.length / 2, 24);
+    shp.writeInt32LE(1, 32);
+    for (let i = 0; i < 2; i++) {
+      const offset = 100 + i * 28;
+      shp.writeInt32BE(10, offset + 4);
+      shp.writeInt32LE(1, offset + 8);
+      shp.writeDoubleLE(110 + i, offset + 12);
+      shp.writeDoubleLE(35, offset + 20);
+    }
+    const imported = readCounties(dbf, shp);
+    assert.deepStrictEqual(imported.points, [['测试县', '測試縣', 'Test Xian', 110, 35, 1368, 1644]]);
+    assert.strictEqual(imported.rejected.length, 1, 'Invalid date ranges must be reported');
+    assert.throws(() => readCounties(dbf, shp.subarray(0, shp.length - 1)), /shapefile/);
+
+    const countyCtrl = Object.create(ControllerClass.prototype);
+    const group = {
+      children: [],
+      set innerHTML(value) { this.children = []; },
+      getScreenCTM: () => ({ a: 5, b: 0, c: 0, d: 5, e: 0, f: 0 }),
+    };
+    const checkbox = { checked: true };
+    Object.assign(countyCtrl, {
+      grpCounties: group,
+      svg: { getBoundingClientRect: () => ({ width: 1000 }), querySelectorAll: () => [] },
+      camera: { x: 0, y: 0, w: 200, h: 140 },
+      projector: { toScreen: (x, y) => [x, y] },
+      locale: 'zh',
+      year: 1368,
+      _countyPoints: [...imported.points, ['远县', '遠縣', 'Far Xian', 250, 35, 1368, 1644]],
+      _id: () => checkbox,
+      _svgNode: (tag, attrs, parent) => {
+        const node = { tag, attrs, children: [] };
+        parent.children.push(node);
+        return node;
+      },
+    });
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children.length, 1, 'Start year must be visible');
+    assert.strictEqual(group.children[0].children[1].textContent, '测试县');
+    const scaleAtFive = Number(group.children[0].attrs.transform.match(/scale\(([^)]+)\)/)[1]);
+    countyCtrl.camera.x = 50;
+    countyCtrl.camera.w = 100;
+    countyCtrl._renderCountyPoints();
+    const scaleAtTen = Number(group.children[0].attrs.transform.match(/scale\(([^)]+)\)/)[1]);
+    assert(scaleAtTen * 10 > scaleAtFive * 5, 'County labels must grow on screen as the map is zoomed');
+    countyCtrl.camera.x = 0;
+    countyCtrl.camera.w = 200;
+    const nearby = ['近县', '近縣', 'Near Xian', 111, 35, 1368, 1644];
+    countyCtrl._countyPoints.push(nearby);
+    countyCtrl._selectedCountyPoint = nearby;
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children[0].children[1].textContent, '近县', 'Selected county must survive label thinning');
+    countyCtrl._selectedCountyPoint = null;
+    countyCtrl._countyPoints.pop();
+    const higherLabel = {
+      hidden: false,
+      closest: () => higherLabel.hidden ? {} : null,
+      getBoundingClientRect: () => ({ left: 550, right: 650, top: 150, bottom: 200, width: 100, height: 50 }),
+    };
+    countyCtrl.svg.querySelectorAll = () => [higherLabel];
+    countyCtrl._selectedCountyPoint = imported.points[0];
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children[0].children[1].attrs['text-anchor'], 'end',
+      'Even a selected county must place its label away from a visible higher-level label');
+    higherLabel.hidden = true;
+    countyCtrl._renderCountyPoints();
+    assert.notStrictEqual(group.children[0].children[1].attrs['text-anchor'], 'end',
+      'Labels in hidden layers must not block county labels');
+    higherLabel.hidden = false;
+    higherLabel.getBoundingClientRect = () => ({ left: 400, right: 700, top: 155, bottom: 195, width: 300, height: 40 });
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children[0].children[1].attrs.y, 33,
+      'A selected county should try a further label position when nearby positions are blocked');
+    higherLabel.getBoundingClientRect = () => ({ left: 0, right: 1000, top: 0, bottom: 700, width: 1000, height: 700 });
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children[0].children.length, 1,
+      'A selected county must retain its marker without overlapping an unavoidable label');
+    countyCtrl._selectedCountyPoint = null;
+    countyCtrl.svg.querySelectorAll = () => [];
+    countyCtrl.camera.x = 200;
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children[0].children[1].textContent, '远县', 'Panning must reveal local points');
+    countyCtrl.camera.x = 0;
+    countyCtrl.locale = 'zh-tw';
+    countyCtrl.year = 1644;
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children[0].children[1].textContent, '測試縣', 'End year and traditional name');
+    countyCtrl.year = 1645;
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children.length, 0, 'Expired counties must be hidden');
+    countyCtrl.year = 1400;
+    countyCtrl.camera.w = 500;
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children.length, 0, 'County layer must require zoom');
+    countyCtrl.camera.w = 200;
+    checkbox.checked = false;
+    countyCtrl._renderCountyPoints();
+    assert.strictEqual(group.children.length, 0, 'County toggle must hide points');
+
+    const loader = Object.create(ControllerClass.prototype);
+    loader.searchIndex = ['stale'];
+    const previousFetch = sandbox.fetch;
+    try {
+      sandbox.fetch = async () => ({ ok: false, status: 404 });
+      await assert.rejects(loader._loadCountyPoints(), /HTTP 404/);
+      sandbox.fetch = async () => ({ ok: true, json: async () => [['invalid']] });
+      await assert.rejects(loader._loadCountyPoints(), /Invalid county point data/);
+      sandbox.fetch = async () => ({ ok: true, json: async () => imported.points });
+      assert.strictEqual((await loader._loadCountyPoints()).length, 1, 'Failed loads must be retryable');
+      assert.strictEqual(loader.searchIndex, null, 'Loading counties must invalidate an existing search index');
+    } finally {
+      sandbox.fetch = previousFetch;
+    }
+  }
+
   // 23w. Hygiene & anti-drift guards: zero unreachable snapshots, zero legacy ?journey= links, zero unreferenced assets, and index.html SSR parity
   {
     if (!FAST_MODE) {
@@ -1812,6 +1959,7 @@ async function runCartographyUiSuite(ctx) {
       rawName: '朝鲜',
     });
 
+    let countyRelayouts = 0;
     const mockCtrl = {
       camera: { x: 200, y: 200, w: 444, h: 311, zoom: 2.25 },
       projector: ctrl.projector,
@@ -1834,9 +1982,11 @@ async function runCartographyUiSuite(ctx) {
           sel === '.neighbor-caption' ? [cambodiaWatermark, joseonWatermark] : [],
       },
       grpProvNames: { querySelectorAll: () => [] },
+      _renderCountyPoints: () => { countyRelayouts++; },
     };
 
     proto._rescaleSvgTypography.call(mockCtrl);
+    assert.strictEqual(countyRelayouts, 1, 'County labels must be laid out after the main map typography');
 
     // 扶南 stays anchored while 柬埔寨 dodges vertically/horizontally away from 扶南
     const finalFunanY = parseFloat(funanNode.getAttribute('data-y'));

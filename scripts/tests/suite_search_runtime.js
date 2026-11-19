@@ -38,6 +38,40 @@ async function runSearchRuntimeSuite(ctx) {
   const zgSnap = snapshots[ctrl._resolveSnapKey(zgDyn, -231)];
   const bsKey = ctrl._resolveSnapKey(bsDyn, 1100);
 
+  {
+    const search = Object.create(ctrl);
+    const oldCounty = ['河曲县', '河曲縣', 'Hequ Xian', 111.22, 39.17, 1153, 1264];
+    const currentCounty = ['河曲县', '河曲縣', 'Hequ Xian', 111.22, 39.17, 1380, 1764];
+    search._countyPoints = [oldCounty, currentCounty];
+    search.searchIndex = null;
+    search.year = 1415;
+    search.dynastyIdx = search._findDynastyIndex(1415);
+    const results = search._queryQuickSearch('河曲县').filter((item) => item.kind === 'county');
+    assert.strictEqual(results.length, 2, 'County search must include distinct historical periods');
+    assert.strictEqual(results[0].countyPoint, currentCounty, 'Current-year county should rank first');
+    assert(search._queryQuickSearch('hequxian').some((item) => item.kind === 'county'), 'Pinyin county search');
+
+    const checkbox = { checked: false };
+    let target, jump;
+    Object.assign(search, {
+      camera: { w: 500 },
+      _id: () => checkbox,
+      stopAutoplay: () => {},
+      clearCustomRoute: () => {},
+      _clearQuickSearchInput: () => {},
+      jumpToYear: (year) => { jump = year; search.year = year; },
+      _getViewportAspect: () => 0.7,
+      _animateCameraTo: (camera) => { target = camera; },
+      _renderCountyPoints: () => {},
+    });
+    search._selectSearchResult(results[0]);
+    assert.strictEqual(jump, undefined, 'Selecting an active county must preserve the selected year');
+    assert.strictEqual(search._selectedCountyPoint, currentCounty);
+    assert(checkbox.checked && target.w <= 1000 / 4, 'Selecting a county must enable its layer and zoom in');
+    search._selectSearchResult(results[1]);
+    assert.strictEqual(jump, 1264, 'Selecting an inactive county must navigate to its nearest valid year');
+  }
+
     // CUJ 38: Compositor Stage Wrapper, Deferred Typography Coalescing, Anti-Flicker Zoom & Zero Layout Thrashing Invariants (Issue #158)
     assert(
       indexHtml.includes('<div id="svg-stage-wrap">') &&
